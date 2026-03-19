@@ -1,0 +1,1 @@
+https://github.com/LisLib/SFML-Template/releases/tag/3.0.2_1.91.9b
