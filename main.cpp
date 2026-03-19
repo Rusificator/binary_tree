@@ -3,6 +3,10 @@
 #include <vector>
 #include <functional>
 #include <optional>
+#include <random>
+#include <set>
+#include <sstream>
+#include <string>
 
 // Структура узла дерева
 struct Node {
@@ -14,17 +18,19 @@ struct Node {
     Node(int val) : value(val), left(nullptr), right(nullptr), x(0), y(0) {}
 };
 
-// Создание примера дерева
-Node* createSampleTree() {
-    Node* root = new Node(5);
-    root->left = new Node(3);
-    root->right = new Node(8);
-    root->left->left = new Node(2);
-    root->left->right = new Node(4);
-    root->right->right = new Node(9);
-    root->left->left->left = new Node(1);
-    root->right->right->left = new Node(7);
-    return root;
+// --- Функции для работы с бинарным деревом поиска ---
+
+// Вставка значения в бинарное дерево поиска (без повторов)
+void insert(Node*& root, int value) {
+    if (root == nullptr) {
+        root = new Node(value);
+        return;
+    }
+    if (value < root->value)
+        insert(root->left, value);
+    else if (value > root->value)
+        insert(root->right, value);
+    // Если равно, ничего не делаем (игнорируем дубликаты)
 }
 
 // Рекурсивное удаление дерева
@@ -34,6 +40,26 @@ void deleteTree(Node* node) {
     deleteTree(node->right);
     delete node;
 }
+
+// --- Функции для вывода обходов ---
+
+// Прямой обход (Pre-order): корень -> левое -> правое
+void printPreOrder(Node* node) {
+    if (!node) return;
+    std::cout << node->value << " ";
+    printPreOrder(node->left);
+    printPreOrder(node->right);
+}
+
+// Обратный обход (Post-order): левое -> правое -> корень
+void printPostOrder(Node* node) {
+    if (!node) return;
+    printPostOrder(node->left);
+    printPostOrder(node->right);
+    std::cout << node->value << " ";
+}
+
+// --- Функции для графики ---
 
 // Вычисление координат узлов (in-order обход)
 void computePositions(Node* node, int& index, float levelY, float vertSpacing, float horSpacing) {
@@ -45,7 +71,7 @@ void computePositions(Node* node, int& index, float levelY, float vertSpacing, f
     computePositions(node->right, index, levelY + vertSpacing, vertSpacing, horSpacing);
 }
 
-// Рисование рёбер (исправлено для SFML 3)
+// Рисование рёбер
 void drawEdges(sf::RenderWindow& window, Node* node, const sf::Color& color) {
     if (!node) return;
     if (node->left) {
@@ -66,11 +92,10 @@ void drawEdges(sf::RenderWindow& window, Node* node, const sf::Color& color) {
     drawEdges(window, node->right, color);
 }
 
-// Рисование узлов (исправлено для SFML 3)
+// Рисование узлов
 void drawNodes(sf::RenderWindow& window, Node* node, const sf::Font& font) {
     if (!node) return;
 
-    // Круг
     sf::CircleShape circle(25);
     circle.setFillColor(sf::Color(50, 150, 250, 220));
     circle.setOutlineColor(sf::Color::White);
@@ -78,15 +103,13 @@ void drawNodes(sf::RenderWindow& window, Node* node, const sf::Font& font) {
     circle.setPosition({ node->x - circle.getRadius(), node->y - circle.getRadius() });
     window.draw(circle);
 
-    // Текст
     sf::Text text(font, std::to_string(node->value), 20);
     text.setFillColor(sf::Color::Black);
     text.setStyle(sf::Text::Bold);
 
-    // Центрирование текста (SFML 3: FloatRect имеет .position и .size)
     sf::FloatRect bounds = text.getLocalBounds();
     text.setOrigin({ bounds.position.x + bounds.size.x / 2.0f,
-                    bounds.position.y + bounds.size.y / 2.0f });
+                     bounds.position.y + bounds.size.y / 2.0f });
     text.setPosition({ node->x, node->y });
     window.draw(text);
 
@@ -94,24 +117,90 @@ void drawNodes(sf::RenderWindow& window, Node* node, const sf::Font& font) {
     drawNodes(window, node->right, font);
 }
 
+// --- Главная функция ---
 int main() {
-    // Включение сглаживания
+    // ----- Интерактивный ввод данных -----
+    int nodeCount = 0;
+    std::cout << "Enter the number of nodes in the binary tree: ";
+    std::cin >> nodeCount;
+    if (nodeCount <= 0) {
+        std::cerr << "Invalid number. Exiting.\n";
+        return 1;
+    }
+
+    std::cout << "Choose input method:\n";
+    std::cout << "1. Enter values manually\n";
+    std::cout << "2. Generate random values\n";
+    int choice;
+    std::cin >> choice;
+
+    std::vector<int> values;
+    if (choice == 1) {
+        // Ручной ввод
+        std::cout << "Enter " << nodeCount << " integer values (separated by spaces): ";
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // очистка буфера
+        std::string line;
+        std::getline(std::cin, line);
+        std::istringstream iss(line);
+        int val;
+        while (iss >> val) {
+            values.push_back(val);
+        }
+        if (values.size() != nodeCount) {
+            std::cerr << "Warning: you entered " << values.size() << " numbers, expected " << nodeCount << ". Will use all entered.\n";
+            nodeCount = values.size(); // подстраиваемся под реальное количество
+        }
+    }
+    else if (choice == 2) {
+        // Генерация случайных уникальных чисел
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<int> dist(1, 99); // числа от 1 до 99
+
+        std::set<int> uniqueVals;
+        while (uniqueVals.size() < nodeCount) {
+            uniqueVals.insert(dist(gen));
+        }
+        values.assign(uniqueVals.begin(), uniqueVals.end());
+        // Перемешаем, чтобы порядок вставки не был отсортирован (иначе дерево выродится)
+        std::shuffle(values.begin(), values.end(), gen);
+        std::cout << "Generated values: ";
+        for (int v : values) std::cout << v << " ";
+        std::cout << std::endl;
+    }
+    else {
+        std::cerr << "Invalid choice. Exiting.\n";
+        return 1;
+    }
+
+    // Строим бинарное дерево поиска
+    Node* root = nullptr;
+    for (int v : values) {
+        insert(root, v);
+    }
+
+    // Выводим обходы для проверки
+    std::cout << "\nPre-order traversal (прямой обход):  ";
+    printPreOrder(root);
+    std::cout << std::endl;
+
+    std::cout << "Post-order traversal (обратный обход): ";
+    printPostOrder(root);
+    std::cout << std::endl << std::endl;
+
+    // ----- Графическая часть -----
     sf::ContextSettings settings;
     settings.antiAliasingLevel = 8;
 
-    // Создание окна
     sf::RenderWindow window(sf::VideoMode({ 1200, 800 }), "Binary Tree Visualization",
         sf::Style::Default, sf::State::Windowed, settings);
     window.setFramerateLimit(60);
 
-    // Загрузка шрифта (SFML 3 использует openFromFile)
     sf::Font font;
     if (!font.openFromFile("Arial.ttf")) {
         std::cerr << "Error: cannot load Arial.ttf. Please place it in the executable directory.\n";
         return -1;
     }
-
-    Node* root = createSampleTree();
 
     // Вычисление позиций узлов
     int index = 0;
@@ -151,7 +240,6 @@ int main() {
 
     // Главный цикл
     while (window.isOpen()) {
-        // Обработка событий (SFML 3)
         while (const std::optional<sf::Event> event = window.pollEvent()) {
             if (event->is<sf::Event::Closed>()) {
                 window.close();
